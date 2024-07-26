@@ -273,6 +273,7 @@ services:
       - ./volumes/sandbox/dependencies:/dependencies
     networks:
       # - ssrf_proxy_network
+      - default
 
 
   # The nginx reverse proxy.
@@ -334,17 +335,6 @@ services:
       AUTHORIZATION_ADMINLIST_ENABLED: ${WEAVIATE_AUTHORIZATION_ADMINLIST_ENABLED:-true}
       AUTHORIZATION_ADMINLIST_USERS: ${WEAVIATE_AUTHORIZATION_ADMINLIST_USERS:-hello@dify.ai}
 
-  # Qdrant vector store.
-  # (if used, you need to set VECTOR_STORE to qdrant in the api & worker service.)
-  qdrant:
-    image: langgenius/qdrant:v1.7.3
-    profiles:
-      - qdrant
-    restart: always
-    volumes:
-      - ./volumes/qdrant:/qdrant/storage
-    environment:
-      QDRANT_API_KEY: ${QDRANT_API_KEY:-difyai123456}
 
   # The pgvector vector database.
   pgvector:
@@ -390,98 +380,6 @@ services:
       timeout: 3s
       retries: 30
 
-  # Chroma vector database
-  chroma:
-    image: ghcr.io/chroma-core/chroma:0.5.1
-    profiles:
-      - chroma
-    restart: always
-    volumes:
-      - ./volumes/chroma:/chroma/chroma
-    environment:
-      CHROMA_SERVER_AUTHN_CREDENTIALS: ${CHROMA_SERVER_AUTHN_CREDENTIALS:-difyai123456}
-      CHROMA_SERVER_AUTHN_PROVIDER: ${CHROMA_SERVER_AUTHN_PROVIDER:-chromadb.auth.token_authn.TokenAuthenticationServerProvider}
-      IS_PERSISTENT: ${CHROMA_IS_PERSISTENT:-TRUE}
-
-  # Oracle vector database
-  oracle:
-    image: container-registry.oracle.com/database/free:latest
-    profiles:
-      - oracle
-    restart: always
-    volumes:
-      - type: volume
-        source: oradata
-        target: /opt/oracle/oradata
-      - ./startupscripts:/opt/oracle/scripts/startup
-    environment:
-      - ORACLE_PWD=${ORACLE_PWD:-Dify123456}
-      - ORACLE_CHARACTERSET=${ORACLE_CHARACTERSET:-AL32UTF8}
-
-  # Milvus vector database services
-  etcd:
-    container_name: milvus-etcd
-    image: quay.io/coreos/etcd:v3.5.5
-    profiles:
-      - milvus
-    environment:
-      - ETCD_AUTO_COMPACTION_MODE=${ETCD_AUTO_COMPACTION_MODE:-revision}
-      - ETCD_AUTO_COMPACTION_RETENTION=${ETCD_AUTO_COMPACTION_RETENTION:-1000}
-      - ETCD_QUOTA_BACKEND_BYTES=${ETCD_QUOTA_BACKEND_BYTES:-4294967296}
-      - ETCD_SNAPSHOT_COUNT=${ETCD_SNAPSHOT_COUNT:-50000}
-    volumes:
-      - ./volumes/milvus/etcd:/etcd
-    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - milvus
-
-  minio:
-    container_name: milvus-minio
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
-    profiles:
-      - milvus
-    environment:
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-    volumes:
-      - ./volumes/milvus/minio:/minio_data
-    command: minio server /minio_data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks:
-      - milvus
-
-  milvus-standalone:
-    container_name: milvus-standalone
-    image: milvusdb/milvus:v2.3.1
-    profiles:
-      - milvus
-    command: ["milvus", "run", "standalone"]
-    environment:
-      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-etcd:2379}
-      MINIO_ADDRESS: ${MINIO_ADDRESS:-minio:9000}
-      common.security.authorizationEnabled: ${MILVUS_AUTHORIZATION_ENABLED:-true}
-    volumes:
-      - ./volumes/milvus/milvus:/var/lib/milvus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: 30s
-      start_period: 90s
-      timeout: 20s
-      retries: 3
-    depends_on:
-      - "etcd"
-      - "minio"
-    networks:
-      - milvus
 
   # Opensearch vector database
   opensearch:
@@ -520,20 +418,7 @@ services:
     depends_on:
       - opensearch
 
-  # MyScale vector database
-  myscale:
-    container_name: myscale
-    image: myscale/myscaledb:1.6
-    profiles:
-      - myscale
-    restart: always
-    tty: true
-    volumes:
-      - ./volumes/myscale/data:/var/lib/clickhouse
-      - ./volumes/myscale/log:/var/log/clickhouse-server
-      - ./volumes/myscale/config/users.d/custom_users_config.xml:/etc/clickhouse-server/users.d/custom_users_config.xml
-    ports:
-      - "${MYSCALE_PORT:-8123}:${MYSCALE_PORT:-8123}"
+
 
 networks:
   # create a network between sandbox, api and ssrf_proxy, and can not access outside.
